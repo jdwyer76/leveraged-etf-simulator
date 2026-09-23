@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>How daily leverage compounds</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+/* Brand tokens: swap these for the issuer's palette and typeface. */
+:root{
+  --bg:#FFFFFF; --panel:#F3F5F7; --ink:#172026; --muted:#55616D;
+  --rule:#DCE1E6; --rule-strong:#B9C2CB;
+  --index:#1D4E89; --fund:#C2410C; --target:#55616D; --focus:#1D4E89;
+  --font:"Public Sans", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  color-scheme:light;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#11171D; --panel:#19222B; --ink:#E7ECF0; --muted:#A5B1BC;
+    --rule:#2A3540; --rule-strong:#3D4A57;
+    --index:#7EB0EA; --fund:#F28C4B; --target:#A5B1BC; --focus:#7EB0EA;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#11171D; --panel:#19222B; --ink:#E7ECF0; --muted:#A5B1BC;
+  --rule:#2A3540; --rule-strong:#3D4A57;
+  --index:#7EB0EA; --fund:#F28C4B; --target:#A5B1BC; --focus:#7EB0EA;
+  color-scheme:dark;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:inherit}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 var(--font);font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+a{color:var(--index)}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.wrap{max-width:1120px;margin:0 auto;padding:32px 20px 48px}
+
+h1{font-size:clamp(1.75rem,3.4vw,2.5rem);line-height:1.12;font-weight:700;letter-spacing:-.015em;margin:0 0 .6rem;max-width:20ch}
+.lede{color:var(--muted);max-width:62ch;margin:0;font-size:1.05rem}
+
+.layout{display:grid;grid-template-columns:292px minmax(0,1fr);gap:44px;margin-top:36px;align-items:start}
+.controls{position:sticky;top:calc(16px + env(safe-area-inset-top,0px))}
+@media (max-width:880px){
+  .layout{grid-template-columns:1fr;gap:28px}
+  .controls{position:static}
+}
+
+fieldset{border:0;margin:0 0 22px;padding:0;min-width:0}
+legend{float:left;width:100%;margin:0 0 10px;padding:0 0 6px;font-weight:600;font-size:.95rem;border-bottom:1px solid var(--rule)}
+fieldset > *:not(legend){clear:both}
+.field{margin:0 0 12px}
+.field > label, .field > .label{display:block;font-size:.88rem;margin:0 0 4px}
+select,input[type=number]{font:inherit;font-size:.95rem;color:var(--ink);background:var(--bg);border:1px solid var(--rule-strong);border-radius:6px;padding:6px 8px;width:100%}
+input[type=number]{width:88px;text-align:right}
+input[type=range]{width:100%;accent-color:var(--index);margin:6px 0 0}
+input:disabled,select:disabled{opacity:.5}
+.row{display:flex;gap:8px;align-items:center}
+.unit{color:var(--muted);font-size:.9rem}
+.hint{font-size:.82rem;color:var(--muted);margin:4px 0 0}
+.choice{display:grid;grid-template-columns:auto 1fr;gap:0 8px;padding:5px 0;align-items:baseline;font-size:.92rem;cursor:pointer}
+.choice input{margin:0;accent-color:var(--index)}
+.choice small{grid-column:2;color:var(--muted);font-size:.82rem;line-height:1.4}
+.check{display:flex;gap:8px;align-items:baseline;font-size:.92rem;cursor:pointer}
+.check input{accent-color:var(--index)}
+.readout{font-size:.88rem;color:var(--muted);margin:0 0 10px}
+.btn{font:inherit;font-weight:600;font-size:.88rem;padding:6px 12px;border-radius:6px;border:1px solid var(--rule-strong);background:var(--bg);color:var(--ink);cursor:pointer}
+.btn:hover{background:var(--panel)}
+.btn:disabled{opacity:.45;cursor:default}
+.status{font-size:.82rem;color:var(--muted);min-height:1.2em;margin:6px 0 0}
+#shareUrl{width:100%;font:inherit;font-size:.8rem;margin-top:6px;padding:4px 6px;border:1px solid var(--rule-strong);border-radius:4px;background:var(--panel);color:var(--ink)}
+
+.headline{font-size:clamp(1.3rem,2.5vw,1.85rem);line-height:1.28;font-weight:600;margin:0 0 .6rem;max-width:32ch;letter-spacing:-.005em}
+.sub{color:var(--muted);margin:0 0 22px;max-width:64ch}
+
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border-top:2px solid var(--ink);border-bottom:1px solid var(--rule);margin:0}
+.stats > div{padding:12px 12px 14px 0}
+.stats dt{font-size:.82rem;color:var(--muted);line-height:1.3;min-height:2.6em}
+.stats dd{margin:4px 0 0;font-size:1.45rem;font-weight:600;line-height:1.1}
+#s1v{color:var(--index)} #s2v{color:var(--fund)}
+@media (max-width:560px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.panel{margin-top:36px}
+.panel-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.panel h2{font-size:1.1rem;margin:0}
+.panel p{margin:4px 0 0;color:var(--muted);font-size:.92rem;max-width:64ch}
+.pathnav{display:flex;gap:6px;align-items:center;font-size:.88rem;color:var(--muted)}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:.86rem;color:var(--muted);margin:12px 0 6px}
+.sw{display:inline-block;width:22px;border-top:3px solid;vertical-align:middle;margin-right:6px}
+.sw.dash{border-top-style:dashed;border-top-width:2px}
+.sw.box{width:12px;height:12px;border:0;margin-top:-2px}
+.chart{position:relative;width:100%}
+.chart svg{display:block;width:100%;height:auto;overflow:visible}
+.chart svg:focus-visible{outline:2px solid var(--focus);outline-offset:4px}
+.chart text{fill:var(--muted);font:11px var(--font);font-variant-numeric:tabular-nums}
+.gridline{stroke:var(--rule);stroke-width:1}
+.zeroline{stroke:var(--muted);stroke-width:1}
+.tip{position:absolute;top:0;pointer-events:none;background:var(--bg);border:1px solid var(--rule-strong);border-radius:6px;padding:8px 10px;font-size:.8rem;line-height:1.5;box-shadow:0 2px 10px rgba(0,0,0,.08);white-space:nowrap;display:none;z-index:2}
+.tip b{font-weight:600}
+.note{font-size:.9rem;color:var(--muted);margin:10px 0 0;max-width:68ch}
+
+details{border-top:1px solid var(--rule);padding:14px 0}
+details:last-of-type{border-bottom:1px solid var(--rule)}
+summary{cursor:pointer;font-weight:600}
+details .inner{padding-top:12px;max-width:70ch}
+details .inner p, details .inner li{font-size:.92rem}
+details h3{font-size:.95rem;margin:18px 0 4px}
+.formula{background:var(--panel);border-radius:6px;padding:10px 12px;font-size:.9rem;overflow-x:auto;white-space:nowrap}
+.table-wrap{overflow:auto;max-height:420px;border:1px solid var(--rule);border-radius:6px;margin-top:8px}
+table{border-collapse:collapse;font-size:.84rem;width:100%}
+th,td{padding:6px 10px;text-align:right;border-bottom:1px solid var(--rule);white-space:nowrap}
+th{position:sticky;top:0;background:var(--panel);font-weight:600}
+td:first-child,th:first-child{text-align:left}
+textarea{width:100%;height:1px;opacity:0;position:absolute;left:-9999px}
+
+.disclosures{margin-top:52px;border-top:2px solid var(--ink);padding-top:16px;font-size:.84rem;color:var(--muted);max-width:84ch}
+.disclosures p{margin:0 0 10px}
+.required{color:var(--ink);font-weight:600}
+.is-hidden{display:none !important}
+@media (prefers-reduced-motion: reduce){*{transition:none !important}}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <header>
+    <h1>How daily leverage compounds over time</h1>
+    <p class="lede">Leveraged and inverse ETFs reset every day. Hold one longer than a day and its return can drift well away from a simple multiple of the index, above or below. Pick a fund and a market to see how often, and by how much.</p>
+  </header>
+
+  <div class="layout">
+    <form class="controls" id="controls" onsubmit="return false" aria-label="Simulation settings">
+      <fieldset>
+        <legend>Fund</legend>
+        <div class="field">
+          <label for="fund">Fund</label>
+          <select id="fund"></select>
+        </div>
+        <p class="hint" id="objective"></p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Index</legend>
+        <div class="field">
+          <label for="und">Index type</label>
+          <select id="und"></select>
+        </div>
+        <div class="field">
+          <label for="vol">Annual volatility</label>
+          <div class="row"><input type="number" id="vol" min="5" max="150" step="1"><span class="unit">%</span></div>
+          <input type="range" id="volRange" min="5" max="150" step="1" aria-label="Annual volatility slider">
+        </div>
+        <div class="field">
+          <label for="drift">Annual trend</label>
+          <div class="row"><input type="number" id="drift" min="-50" max="50" step="1"><span class="unit">% a year</span></div>
+          <p class="hint" id="driftHint">Used in random markets only.</p>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Holding period</legend>
+        <div class="field">
+          <label for="days">Trading days held</label>
+          <div class="row"><input type="number" id="days" min="1" max="504" step="1"><span class="unit" id="daysUnit"></span></div>
+          <input type="range" id="daysRange" min="1" max="504" step="1" aria-label="Trading days slider">
+        </div>
+      </fieldset>
+
+      <fieldset id="scenSet">
+        <legend>Market</legend>
+        <label class="choice"><input type="radio" name="scen" value="random"><span>Random markets</span><small>Many simulated markets using your volatility and trend.</small></label>
+        <label class="choice"><input type="radio" name="scen" value="climb"><span>Steady climb</span><small>Index rises the same amount every day, about 20% a year. No volatility.</small></label>
+        <label class="choice"><input type="radio" name="scen" value="chop"><span>Choppy sideways</span><small>Index alternates up and down by one typical day's move.</small></label>
+        <label class="choice"><input type="radio" name="scen" value="crash"><span>Drop and recover</span><small>Index falls 30% with normal daily swings, then climbs back to where it started.</small></label>
+        <label class="check" style="margin-top:8px"><input type="checkbox" id="tails"><span>Include fat-tailed days</span></label>
+        <p class="hint">Adds occasional large moves, closer to real markets.</p>
+      </fieldset>
+
+      <fieldset>
+        <legend>Costs</legend>
+        <label class="check" style="margin-bottom:8px"><input type="checkbox" id="fees"><span>Include fees and financing</span></label>
+        <p class="readout" id="erReadout"></p>
+        <div class="field">
+          <label for="sofr">Financing rate (SOFR)</label>
+          <div class="row"><input type="number" id="sofr" min="0" max="15" step="0.05"><span class="unit">%</span></div>
+        </div>
+        <div class="field">
+          <label for="spread">Swap spread</label>
+          <div class="row"><input type="number" id="spread" min="0" max="5" step="0.05"><span class="unit">%</span></div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Simulation</legend>
+        <div class="field">
+          <label for="paths">Number of markets</label>
+          <select id="paths">
+            <option value="500">500</option>
+            <option value="1000">1,000</option>
+            <option value="5000">5,000</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="seed">Seed</label>
+          <div class="row"><input type="number" id="seed" min="1" max="999999" step="1"><button type="button" class="btn" id="newSeed">New seed</button></div>
+          <p class="hint">The same seed and settings always give the same results.</p>
+        </div>
+        <button type="button" class="btn" id="copyLink">Copy link</button>
+        <p class="status" id="linkStatus" role="status"></p>
+        <input id="shareUrl" class="is-hidden" readonly aria-label="Shareable link">
+      </fieldset>
+    </form>
+
+    <section class="results" aria-label="Results">
+      <p class="headline" id="headline" aria-live="polite"></p>
+      <p class="sub" id="sub"></p>
+
+      <dl class="stats">
+        <div><dt id="s1l"></dt><dd id="s1v"></dd></div>
+        <div><dt id="s2l"></dt><dd id="s2v"></dd></div>
+        <div><dt id="s3l"></dt><dd id="s3v"></dd></div>
+        <div><dt id="s4l"></dt><dd id="s4v"></dd></div>
+      </dl>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2 id="lineTitle">One market, day by day</h2>
+          <div class="pathnav" id="pathNav">
+            <button type="button" class="btn" id="prevPath" aria-label="Previous market">Previous</button>
+            <span id="pathLabel"></span>
+            <button type="button" class="btn" id="nextPath" aria-label="Next market">Next</button>
+          </div>
+        </div>
+        <div class="legend" id="lineLegend"></div>
+        <div class="chart" id="lineChart"></div>
+        <p class="note" id="pathNote"></p>
+      </div>
+
+      <div class="panel" id="histPanel">
+        <h2>Where every market landed</h2>
+        <p id="histIntro"></p>
+        <div class="legend" id="histLegend"></div>
+        <div class="chart" id="histChart"></div>
+      </div>
+
+      <div class="panel">
+        <details id="daily">
+          <summary>Daily data for this market</summary>
+          <div class="inner" style="max-width:none">
+            <button type="button" class="btn" id="copyCsv">Copy CSV</button>
+            <span class="status" id="csvStatus" role="status" style="margin-left:8px"></span>
+            <div class="table-wrap"><table id="table"></table></div>
+            <textarea id="csv" aria-hidden="true" tabindex="-1"></textarea>
+          </div>
+        </details>
+
+        <details id="method">
+          <summary>How the simulation works</summary>
+          <div class="inner">
+            <h3>Index returns</h3>
+            <p>Random markets draw each day's index return from a normal distribution, or a fat-tailed Student-t distribution with 4 degrees of freedom scaled to the same volatility. Daily volatility is annual volatility ÷ √252 and daily trend is annual trend ÷ 252. The seed makes every run repeatable.</p>
+            <h3>Fund returns</h3>
+            <p>Each day the fund earns its multiple of the index return plus a carry term for fees and financing:</p>
+            <p class="formula">fund return = k × index return + [(1 − k) × SOFR − swap notional × spread − expense ratio] ÷ 252</p>
+            <p>Swap notional is k − 1 for long funds and |k| for inverse funds. Long funds pay to finance their extra exposure. Inverse funds earn interest on cash collateral. If a single day's loss would exceed 100%, the fund goes to zero and stays there.</p>
+            <h3>Why the gap appears</h3>
+            <p>With no costs, a fund held for n days ends close to:</p>
+            <p class="formula">(1 + index return)<sup>k</sup> × e<sup>−½ k(k − 1) σ² n</sup> − 1</p>
+            <p>σ² is the variance of daily index returns. For any long multiple above 1× and for every inverse fund, k(k − 1) is positive, so volatility pulls the result down. In a steady trend with little volatility, the first term can push the fund above k × the index return.</p>
+            <h3>A two-day example</h3>
+            <p>The index rises 10%, then falls 10%: $100 to $110 to $99, a 1% loss. A 2× fund goes $100 to $120 to $96, a 4% loss. Twice the index's return would have been a 2% loss.</p>
+            <h3>Why we show medians</h3>
+            <p>Averaged across many markets, a fund with no costs lands close to k × the index return, because a few big winners offset many shortfalls. The median shows what a typical holder would have seen.</p>
+            <h3>Limitations</h3>
+            <ul>
+              <li>Volatility, trend, SOFR and swap spreads are held constant. Real markets change.</li>
+              <li>No tracking error, trading costs, bid-ask spreads, premiums or discounts to NAV, or taxes.</li>
+              <li>The index is hypothetical. Results are not the performance of any fund or index.</li>
+              <li>Real funds may use different instruments and financing terms than modeled here.</li>
+            </ul>
+          </div>
+        </details>
+      </div>
+    </section>
+  </div>
+
+  <footer class="disclosures">
+    <p class="required">IMPORTANT: The projections or other information generated by this tool regarding the likelihood of various investment outcomes are hypothetical in nature, do not reflect actual investment results and are not guarantees of future results.</p>
+    <p>Results may vary with each use and over time. See "How the simulation works" for the methodology, assumptions and limitations. The tool does not consider every investment available, and other investments not considered may have characteristics similar or superior to those analyzed.</p>
+    <p>Leveraged and inverse ETFs seek daily investment results, before fees and expenses, of a multiple of the daily performance of their index. They do not seek to achieve that multiple for any period longer than one day. They are intended for knowledgeable investors who understand leverage and compounding and who intend to monitor their holdings actively. Investors could lose their entire investment.</p>
+    <p>Before investing, carefully consider each fund's investment objectives, risks, charges and expenses. This and other information is in the <a id="prospectusLink" href="#">prospectus</a>. Read it carefully before investing. [Distributor name], distributor.</p>
+  </footer>
+</main>
+
+<script>
+(function(){
+'use strict';
+
+/* ---------- Issuer configuration: replace with your lineup ---------- */
+var CONFIG = {
+  prospectusUrl: '#',
+  funds: [
+    { name: 'Example 2× Long',     k:  2, er: 0.95 },
+    { name: 'Example 3× Long',     k:  3, er: 0.95 },
+    { name: 'Example −1× Inverse', k: -1, er: 0.95 },
+    { name: 'Example −2× Inverse', k: -2, er: 0.95 },
+    { name: 'Example −3× Inverse', k: -3, er: 0.95 }
+  ],
+  indexes: [
+    { id: 'broad',  name: 'Broad equity index',   vol: 18 },
+    { id: 'tech',   name: 'Large-cap tech index', vol: 26 },
+    { id: 'sector', name: 'Volatile sector index', vol: 38 },
+    { id: 'single', name: 'Single stock',          vol: 55 },
+    { id: 'custom', name: 'Custom',                vol: null }
+  ],
+  defaults: { fund: 0, und: 'broad', vol: 18, drift: 5, days: 126, scen: 'random',
+              tails: false, fees: true, sofr: 4.00, spread: 0.50, paths: 1000, seed: 42, path: 0 }
+};
+
+var MINUS = '\u2212';
+var SCEN_NAMES = { random: 'random', climb: 'steady climb', chop: 'choppy sideways', crash: 'drop-and-recover' };
+function $(s){ return document.querySelector(s); }
+var el = {
+  fund: $('#fund'), und: $('#und'), vol: $('#vol'), volR: $('#volRange'), drift: $('#drift'),
+  days: $('#days'), daysR: $('#daysRange'), tails: $('#tails'), fees: $('#fees'),
+  sofr: $('#sofr'), spread: $('#spread'), paths: $('#paths'), seed: $('#seed')
+};
+var state = { pathIdx: 0, p: null, mc: null, path: null };
+
+/* ---------- Formatting ---------- */
+function sign(x){ return x < 0 ? MINUS : '+'; }
+function pct(x, d){ d = d == null ? 1 : d; if (Math.abs(x) < 0.00005) return '0.0%'; return sign(x) + Math.abs(x * 100).toFixed(d) + '%'; }
+function pts(x){ return sign(x) + Math.abs(x * 100).toFixed(1) + ' pts'; }
+function absPts(x){ return Math.abs(x * 100).toFixed(1) + ' pts'; }
+function kLabel(k){ return (k < 0 ? MINUS : '') + Math.abs(k) + '×'; }
+function share(c, n){
+  if (c === 0) return '0%';
+  var r = c / n * 100;
+  if (r < 1) return 'less than 1%';
+  if (r > 99 && c < n) return 'more than 99%';
+  return Math.round(r) + '%';
+}
+function periodLabel(n){
+  var s = n + ' trading day' + (n === 1 ? '' : 's');
+  if (n >= 252) { var y = n / 252; s += ' (about ' + (Number.isInteger(y) ? y : y.toFixed(1)) + ' year' + (y === 1 ? '' : 's') + ')'; }
+  else if (n >= 21) { var m = Math.round(n / 21); s += ' (about ' + m + ' month' + (m === 1 ? '' : 's') + ')'; }
+  else if (n >= 5) { var w = Math.round(n / 5); s += ' (about ' + w + ' week' + (w === 1 ? '' : 's') + ')'; }
+  return s;
+}
+function shortPeriod(n){
+  if (n >= 252) { var y = n / 252; return '≈ ' + (Number.isInteger(y) ? y : y.toFixed(1)) + ' yr'; }
+  if (n >= 21) return '≈ ' + Math.round(n / 21) + ' mo';
+  if (n >= 5) return '≈ ' + Math.round(n / 5) + ' wk';
+  return '';
+}
+function moved(x){
+  if (Math.abs(x) < 0.0005) return 'ended flat';
+  return (x > 0 ? 'gained ' : 'lost ') + Math.abs(x * 100).toFixed(1) + '%';
+}
+
+/* ---------- Random numbers (seeded) ---------- */
+function mulberry32(a){
+  return function(){
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    var t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+function mix(seed, i){
+  var h = (seed >>> 0) ^ Math.imul(i + 1, 0x9E3779B1);
+  h = Math.imul(h ^ (h >>> 16), 0x85EBCA6B);
+  h = Math.imul(h ^ (h >>> 13), 0xC2B2AE35);
+  return (h ^ (h >>> 16)) >>> 0;
+}
+function makeNormal(rand){
+  var spare = null;
+  return function(){
+    if (spare !== null) { var s = spare; spare = null; return s; }
+    var u = 0; while (u === 0) u = rand();
+    var v = rand(), m = Math.sqrt(-2 * Math.log(u));
+    spare = m * Math.sin(2 * Math.PI * v);
+    return m * Math.cos(2 * Math.PI * v);
+  };
+}
+function makeT(rand){ // Student-t, 4 df, scaled to unit variance
+  var n = makeNormal(rand);
+  return function(){
+    var z = n(), c = 0;
+    for (var j = 0; j < 4; j++) { var q = n(); c += q * q; }
+    return z / Math.sqrt(c / 4) / Math.SQRT2;
+  };
+}
+
+/* ---------- Model ---------- */
+function dailyCarry(p){
+  if (!p.fees) return 0;
+  var k = p.k, swapN = k >= 1 ? k - 1 : Math.abs(k);
+  return ((1 - k) * p.sofr / 100 - swapN * p.spread / 100 - p.er / 100) / 252;
+}
+function genIndex(p, i, out){
+  var n = p.days, sd = p.vol / 100 / Math.sqrt(252), mu = p.drift / 100 / 252, d;
+  if (p.scen === 'random') {
+    var rand = mulberry32(mix(p.seed, i)), g = p.tails ? makeT(rand) : makeNormal(rand);
+    for (d = 0; d < n; d++) out[d] = Math.max(-0.99, mu + sd * g());
+  } else if (p.scen === 'climb') {
+    var r = Math.pow(1.2, 1 / 252) - 1;
+    for (d = 0; d < n; d++) out[d] = r;
+  } else if (p.scen === 'chop') {
+    for (d = 0; d < n; d++) out[d] = d % 2 === 0 ? sd : -sd;
+  } else {
+    // Smooth 30% drop and full recovery, with day-to-day swings layered on top
+    var n1 = Math.max(1, Math.round(n / 3)), n2 = n - n1;
+    var r1 = Math.pow(0.7, 1 / n1) - 1, r2 = n2 > 0 ? Math.pow(1 / 0.7, 1 / n2) - 1 : 0;
+    var S = 1, prev = 1;
+    for (d = 0; d < n; d++) {
+      S *= 1 + (d < n1 ? r1 : r2);
+      var t = d + 1, P = S * (t % 2 === 1 && t < n ? 1 + sd : 1);
+      out[d] = P / prev - 1; prev = P;
+    }
+  }
+}
+function finalOnly(p, r, c){
+  var k = p.k, I = 1, F = 1, G = 1;
+  for (var d = 0; d < p.days; d++) {
+    var x = r[d];
+    I *= 1 + x;
+    F *= Math.max(0, 1 + k * x + c);
+    G *= Math.max(0, 1 + k * x);
+  }
+  return { I: I, F: F, G: G };
+}
+function fullPath(p, r){
+  var n = p.days, k = p.k, c = dailyCarry(p);
+  var I = new Float64Array(n + 1), F = new Float64Array(n + 1), G = new Float64Array(n + 1),
+      T = new Float64Array(n + 1), fr = new Float64Array(n + 1);
+  var i = 1, f = 1, g = 1, pi = 1, pf = 1, ddI = 0, ddF = 0, m2 = 0;
+  for (var d = 0; d < n; d++) {
+    var x = r[d], prev = f;
+    m2 += x * x;
+    i *= 1 + x;
+    f *= Math.max(0, 1 + k * x + c);
+    g *= Math.max(0, 1 + k * x);
+    pi = Math.max(pi, i); pf = Math.max(pf, f);
+    ddI = Math.min(ddI, i / pi - 1);
+    ddF = Math.min(ddF, pf > 0 ? f / pf - 1 : 0);
+    I[d + 1] = i - 1; F[d + 1] = f - 1; G[d + 1] = g - 1; T[d + 1] = k * (i - 1);
+    fr[d + 1] = prev > 0 ? f / prev - 1 : 0;
+  }
+  m2 /= Math.max(1, n);
+  var pred = Math.pow(i, k) * Math.exp(-0.5 * k * (k - 1) * m2 * n) - 1;
+  return { n: n, r: r, I: I, F: F, G: G, T: T, fr: fr, ddI: ddI, ddF: ddF, pred: pred,
+           idx: i - 1, fund: f - 1, gross: g - 1, tgt: k * (i - 1) };
+}
+function median(a){
+  var s = Float64Array.from(a).sort(), m = s.length >> 1;
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
+/* ---------- Params & URL ---------- */
+function readParams(){
+  var fi = +el.fund.value, f = CONFIG.funds[fi];
+  var sc = document.querySelector('input[name=scen]:checked');
+  return {
+    fundIdx: fi, k: f.k, er: f.er, fundName: f.name, und: el.und.value,
+    vol: +el.vol.value, drift: +el.drift.value, days: +el.days.value,
+    scen: sc ? sc.value : 'random', tails: el.tails.checked, fees: el.fees.checked,
+    sofr: +el.sofr.value, spread: +el.spread.value, paths: +el.paths.value, seed: +el.seed.value
+  };
+}
+function clamp(v, lo, hi){ return Math.min(hi, Math.max(lo, v)); }
+function applySettings(s){
+  el.fund.value = clamp(parseInt(s.fund, 10) || 0, 0, CONFIG.funds.length - 1);
+  el.und.value = CONFIG.indexes.some(function(u){ return u.id === s.und; }) ? s.und : 'custom';
+  el.vol.value = el.volR.value = clamp(Math.round(+s.vol) || 18, 5, 150);
+  el.drift.value = clamp(Math.round(+s.drift) || 0, -50, 50);
+  el.days.value = el.daysR.value = clamp(Math.round(+s.days) || 126, 1, 504);
+  var scen = SCEN_NAMES[s.scen] ? s.scen : 'random';
+  document.querySelector('input[name=scen][value="' + scen + '"]').checked = true;
+  el.tails.checked = s.tails === true || s.tails === '1';
+  el.fees.checked = !(s.fees === false || s.fees === '0');
+  el.sofr.value = clamp(isFinite(+s.sofr) ? +s.sofr : 4, 0, 15).toFixed(2);
+  el.spread.value = clamp(isFinite(+s.spread) ? +s.spread : 0.5, 0, 5).toFixed(2);
+  el.paths.value = ['500', '1000', '5000'].indexOf(String(s.paths)) >= 0 ? String(s.paths) : '1000';
+  el.seed.value = clamp(Math.round(+s.seed) || 42, 1, 999999);
+  state.pathIdx = Math.max(0, parseInt(s.path, 10) || 0);
+}
+function readURL(){
+  var s = Object.assign({}, CONFIG.defaults);
+  try {
+    var q = new URLSearchParams(window.location.search);
+    Object.keys(CONFIG.defaults).forEach(function(key){ if (q.has(key)) s[key] = q.get(key); });
+  } catch (e) {}
+  applySettings(s);
+}
+function buildQuery(p){
+  return new URLSearchParams({
+    fund: p.fundIdx, und: p.und, vol: p.vol, drift: p.drift, days: p.days, scen: p.scen,
+    tails: p.tails ? 1 : 0, fees: p.fees ? 1 : 0, sofr: p.sofr, spread: p.spread,
+    paths: p.paths, seed: p.seed, path: state.pathIdx
+  }).toString();
+}
+function writeURL(p){
+  try { history.replaceState(null, '', '?' + buildQuery(p)); } catch (e) {}
+}
+
+/* ---------- Run ---------- */
+function run(){
+  var p = readParams(); state.p = p;
+  syncUI(p);
+  if (state.pathIdx >= p.paths) state.pathIdx = 0;
+  var c = dailyCarry(p), buf, i;
+  if (p.scen === 'random') {
+    var N = p.paths, idx = new Float64Array(N), fund = new Float64Array(N), gap = new Float64Array(N), cost = new Float64Array(N);
+    var below = 0, half = 0, zero = 0;
+    buf = new Float64Array(p.days);
+    for (i = 0; i < N; i++) {
+      genIndex(p, i, buf);
+      var o = finalOnly(p, buf, c), t = p.k * (o.I - 1);
+      idx[i] = o.I - 1; fund[i] = o.F - 1; gap[i] = fund[i] - t; cost[i] = o.F - o.G;
+      if (fund[i] < t) below++;
+      if (fund[i] <= -0.5) half++;
+      if (o.F === 0) zero++;
+    }
+    state.mc = { N: N, idx: idx, fund: fund, gap: gap, cost: cost, below: below, half: half, zero: zero };
+  } else {
+    state.mc = null;
+  }
+  buf = new Float64Array(p.days);
+  genIndex(p, p.scen === 'random' ? state.pathIdx : 0, buf);
+  state.path = fullPath(p, buf);
+  renderText();
+  drawLine();
+  drawHist();
+  if ($('#daily').open) renderTable();
+  writeURL(p);
+}
+var timer = null;
+function schedule(){ clearTimeout(timer); timer = setTimeout(run, 80); }
+
+/* ---------- UI sync ---------- */
+function syncUI(p){
+  var kl = kLabel(p.k), random = p.scen === 'random';
+  $('#objective').textContent = 'Seeks daily investment results, before fees and expenses, of ' +
+    (p.k < 0 ? MINUS : '') + Math.abs(p.k * 100) + '% of the daily performance of its index. It does not seek that multiple over longer periods.';
+  $('#erReadout').textContent = 'Expense ratio: ' + p.er.toFixed(2) + '% (from the prospectus)';
+  el.sofr.disabled = el.spread.disabled = !p.fees;
+  el.drift.disabled = !random;
+  $('#driftHint').textContent = random ? 'Used in random markets only.' : 'Not used in this market.';
+  var volUsed = p.scen !== 'climb';
+  el.vol.disabled = el.volR.disabled = el.und.disabled = !volUsed;
+  el.tails.disabled = !random;
+  el.paths.disabled = !random;
+  $('#newSeed').disabled = el.seed.disabled = !random;
+  $('#pathNav').classList.toggle('is-hidden', !random);
+  $('#histPanel').classList.toggle('is-hidden', !random);
+  $('#daysUnit').textContent = shortPeriod(p.days);
+  $('#lineTitle').textContent = random ? 'One market, day by day' : 'This market, day by day';
+  $('#pathLabel').textContent = 'Market ' + (state.pathIdx + 1).toLocaleString('en-US') + ' of ' + p.paths.toLocaleString('en-US');
+  $('#prevPath').disabled = state.pathIdx <= 0;
+  $('#nextPath').disabled = state.pathIdx >= p.paths - 1;
+  $('#lineLegend').innerHTML =
+    '<span><i class="sw" style="border-color:var(--index)"></i>Index</span>' +
+    '<span><i class="sw" style="border-color:var(--fund)"></i>' + kl + ' fund</span>' +
+    '<span><i class="sw dash" style="border-color:var(--target)"></i>' + kl + ' the index\u2019s return</span>';
+  $('#histLegend').innerHTML =
+    '<span><i class="sw box" style="background:var(--fund)"></i>Fund fell short of ' + kl + ' the index</span>' +
+    '<span><i class="sw box" style="background:var(--fund);opacity:.35"></i>Fund beat it</span>' +
+    '<span><i class="sw dash" style="border-color:var(--ink)"></i>Median</span>';
+}
+
+function renderText(){
+  var p = state.p, mc = state.mc, P = state.path, kl = kLabel(p.k), sub;
+  if (mc) {
+    var mg = median(mc.gap), mcost = median(mc.cost), mi = median(mc.idx);
+    $('#headline').textContent = 'In ' + share(mc.below, mc.N) + ' of ' + mc.N.toLocaleString('en-US') +
+      ' simulated markets, the ' + kl + ' fund ended below ' + kl + ' the index\u2019s return over ' + periodLabel(p.days) + '.';
+    sub = 'The median gap was ' + pts(mg) + '.';
+    sub += p.fees
+      ? ' Fees and financing ' + (mcost < 0 ? 'took away' : 'added') + ' about ' + absPts(mcost) + '; the rest comes from daily compounding.'
+      : ' Fees and financing are switched off, so the gap is all daily compounding.';
+    if (mc.half) sub += ' The fund lost half its value or more in ' + share(mc.half, mc.N) + ' of markets' +
+      (mc.zero ? ' and went to zero in ' + mc.zero.toLocaleString('en-US') + '.' : '.');
+    setStat(1, 'Median index return', pct(mi));
+    setStat(2, 'Median fund return', pct(median(mc.fund)));
+    setStat(3, 'Median of ' + kl + ' the index\u2019s return', pct(p.k * mi));
+    setStat(4, 'Median gap vs ' + kl, pts(mg));
+    $('#histIntro').textContent = 'Each bar counts markets by how far the fund landed from ' + kl +
+      ' the index\u2019s return. Bars left of the line fell short.';
+  } else {
+    $('#headline').textContent = 'In this ' + SCEN_NAMES[p.scen] + ' market, the index ' + moved(P.idx) +
+      ' and the ' + kl + ' fund ' + moved(P.fund) + ' over ' + periodLabel(p.days) + '.';
+    var pc = P.fund - P.gross;
+    sub = kl + ' the index\u2019s return would have been ' + pct(P.tgt) + ', a gap of ' + pts(P.fund - P.tgt) + '.';
+    sub += p.fees ? ' Fees and financing ' + (pc < 0 ? 'took away' : 'added') + ' about ' + absPts(pc) + '; the rest is daily compounding.' : '';
+    setStat(1, 'Index return', pct(P.idx));
+    setStat(2, 'Fund return', pct(P.fund));
+    setStat(3, kl + ' the index\u2019s return', pct(P.tgt));
+    setStat(4, 'Gap vs ' + kl, pts(P.fund - P.tgt));
+  }
+  $('#sub').textContent = sub;
+  var note = 'Deepest drop along the way: ' + pct(P.ddF) + ' for the fund, ' + pct(P.ddI) + ' for the index.';
+  if (P.fund <= -1) note += ' The fund went to zero on this path.';
+  else note += ' Given the volatility this market actually had, the compounding formula predicts ' + pct(P.pred) +
+    ' before costs. The simulation produced ' + pct(P.gross) + '.';
+  $('#pathNote').textContent = note;
+}
+function setStat(i, label, val){ $('#s' + i + 'l').textContent = label; $('#s' + i + 'v').textContent = val; }
+
+/* ---------- Charts ---------- */
+function niceTicks(min, max, count){
+  if (max - min < 1e-12) { min -= 0.01; max += 0.01; }
+  var step0 = (max - min) / Math.max(1, count), mag = Math.pow(10, Math.floor(Math.log10(step0))), err = step0 / mag;
+  var step = (err >= 7.5 ? 10 : err >= 3.5 ? 5 : err >= 1.5 ? 2 : 1) * mag;
+  var lo = Math.floor(min / step) * step, hi = Math.ceil(max / step) * step, ticks = [];
+  for (var v = lo; v <= hi + step / 2; v += step) ticks.push(Math.abs(v) < step / 1e6 ? 0 : +v.toFixed(10));
+  return { lo: lo, hi: hi, ticks: ticks, step: step };
+}
+function tickPct(t, step){
+  var d = step * 100 < 1 ? 1 : 0;
+  if (t === 0) return '0%';
+  return (t < 0 ? MINUS : '+') + Math.abs(t * 100).toFixed(d) + '%';
+}
+
+function drawLine(){
+  var box = $('#lineChart'), P = state.path, p = state.p;
+  if (!P) return;
+  var kl = kLabel(p.k), n = P.n;
+  var series = [
+    { v: P.T, c: 'var(--target)', dash: '6 5', w: 2, label: kl + ' the index' },
+    { v: P.I, c: 'var(--index)', w: 2.25, label: 'Index' },
+    { v: P.F, c: 'var(--fund)', w: 2.5, label: kl + ' fund' }
+  ];
+  var W = Math.max(280, Math.round(box.clientWidth || 600)), H = W < 520 ? 230 : 300;
+  var m = { l: 54, r: 12, t: 12, b: 34 };
+  var lo = 0, hi = 0;
+  series.forEach(function(s){ for (var d = 0; d <= n; d++) { if (s.v[d] < lo) lo = s.v[d]; if (s.v[d] > hi) hi = s.v[d]; } });
+  var Y = niceTicks(lo, hi, 5), X = niceTicks(0, n, Math.min(6, n));
+  function xs(d){ return m.l + (n ? d / n : 0) * (W - m.l - m.r); }
+  function ys(v){ return m.t + (Y.hi - v) / (Y.hi - Y.lo) * (H - m.t - m.b); }
+  var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" tabindex="0" role="img" aria-label="Line chart of cumulative returns for the index, the fund and ' + kl + ' the index over ' + n + ' trading days. Use left and right arrow keys to read values by day.">';
+  Y.ticks.forEach(function(t){
+    s += '<line x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + ys(t) + '" y2="' + ys(t) + '" class="' + (t === 0 ? 'zeroline' : 'gridline') + '"/>';
+    s += '<text x="' + (m.l - 8) + '" y="' + (ys(t) + 4) + '" text-anchor="end">' + tickPct(t, Y.step) + '</text>';
+  });
+  X.ticks.forEach(function(t){
+    if (t < 0 || t > n || !Number.isInteger(t)) return;
+    s += '<text x="' + xs(t) + '" y="' + (H - m.b + 16) + '" text-anchor="middle">' + t + '</text>';
+  });
+  s += '<text x="' + (W - m.r) + '" y="' + (H - 2) + '" text-anchor="end">Trading day</text>';
+  series.forEach(function(se){
+    var d = 'M' + xs(0).toFixed(1) + ' ' + ys(se.v[0]).toFixed(1);
+    for (var i = 1; i <= n; i++) d += 'L' + xs(i).toFixed(1) + ' ' + ys(se.v[i]).toFixed(1);
+    s += '<path d="' + d + '" fill="none" stroke="' + se.c + '" stroke-width="' + se.w + '" stroke-linejoin="round"' + (se.dash ? ' stroke-dasharray="' + se.dash + '"' : '') + '/>';
+  });
+  s += '<g id="hover" style="display:none"><line id="hx" y1="' + m.t + '" y2="' + (H - m.b) + '" stroke="var(--rule-strong)"/>';
+  series.forEach(function(se, j){ s += '<circle id="hc' + j + '" r="4" fill="var(--bg)" stroke="' + se.c + '" stroke-width="2"/>'; });
+  s += '</g><rect x="' + m.l + '" y="' + m.t + '" width="' + (W - m.l - m.r) + '" height="' + (H - m.t - m.b) + '" fill="transparent" id="hitLine"/></svg>';
+  box.innerHTML = s + '<div class="tip" id="lineTip"></div>';
+
+  var svg = box.querySelector('svg'), tip = $('#lineTip'), g = $('#hover'), cur = null;
+  function show(d){
+    cur = clamp(d, 0, n);
+    var x = xs(cur);
+    g.style.display = '';
+    $('#hx').setAttribute('x1', x); $('#hx').setAttribute('x2', x);
+    series.forEach(function(se, j){ var c = $('#hc' + j); c.setAttribute('cx', x); c.setAttribute('cy', ys(se.v[cur])); });
+    tip.innerHTML = '<b>Day ' + cur + '</b><br>Index ' + pct(P.I[cur]) + '<br>' + kl + ' fund ' + pct(P.F[cur]) +
+      '<br>' + kl + ' the index ' + pct(P.T[cur]) + '<br>Gap ' + pts(P.F[cur] - P.T[cur]);
+    tip.style.display = 'block';
+    var scale = box.clientWidth / W, px = x * scale, tw = tip.offsetWidth;
+    tip.style.left = (px + 14 + tw > box.clientWidth ? Math.max(0, px - 14 - tw) : px + 14) + 'px';
+    tip.style.top = (m.t * scale) + 'px';
+  }
+  function hide(){ g.style.display = 'none'; tip.style.display = 'none'; }
+  svg.addEventListener('pointermove', function(e){
+    var r = svg.getBoundingClientRect(), x = (e.clientX - r.left) * (W / r.width);
+    show(Math.round((x - m.l) / (W - m.l - m.r) * n));
+  });
+  svg.addEventListener('pointerleave', hide);
+  svg.addEventListener('keydown', function(e){
+    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+      e.preventDefault();
+      var step = e.shiftKey ? 10 : 1;
+      show((cur == null ? (e.key === 'ArrowRight' ? -step : n + step) : cur) + (e.key === 'ArrowRight' ? step : -step));
+    } else if (e.key === 'Escape') hide();
+  });
+  svg.addEventListener('blur', hide);
+}
+
+function drawHist(){
+  var mc = state.mc, box = $('#histChart');
+  if (!mc) { box.innerHTML = ''; return; }
+  var N = mc.N, sorted = Float64Array.from(mc.gap).sort();
+  function q(f){ return sorted[clamp(Math.floor(f * (N - 1)), 0, N - 1)]; }
+  var lo = Math.min(q(0.01), 0), hi = Math.max(q(0.99), 0);
+  if (hi - lo < 1e-6) { lo -= 0.005; hi += 0.005; }
+  var pad = (hi - lo) * 0.04; lo -= pad; hi += pad;
+  var B = 36, bw = (hi - lo) / B, counts = new Array(B).fill(0);
+  for (var i = 0; i < N; i++) counts[clamp(Math.floor((mc.gap[i] - lo) / bw), 0, B - 1)]++;
+  var maxShare = Math.max.apply(null, counts) / N;
+  var W = Math.max(280, Math.round(box.clientWidth || 600)), H = W < 520 ? 210 : 250;
+  var m = { l: 48, r: 12, t: 22, b: 44 };
+  function xs(v){ return m.l + (v - lo) / (hi - lo) * (W - m.l - m.r); }
+  var Y = niceTicks(0, maxShare, 4);
+  function ys(v){ return m.t + (Y.hi - v) / Y.hi * (H - m.t - m.b); }
+  var kl = kLabel(state.p.k), med = median(mc.gap);
+  var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" role="img" aria-label="Histogram of the gap between the fund and ' + kl + ' the index across ' + N + ' markets. ' + share(mc.below, N) + ' fell short. Median gap ' + pts(med) + '.">';
+  Y.ticks.forEach(function(t){
+    s += '<line x1="' + m.l + '" x2="' + (W - m.r) + '" y1="' + ys(t) + '" y2="' + ys(t) + '" class="gridline"/>';
+    s += '<text x="' + (m.l - 8) + '" y="' + (ys(t) + 4) + '" text-anchor="end">' + (t * 100).toFixed(Y.step * 100 < 1 ? 1 : 0) + '%</text>';
+  });
+  counts.forEach(function(c, b){
+    if (!c) return;
+    var a = lo + b * bw, x0 = xs(a), x1 = xs(a + bw), y = ys(c / N);
+    s += '<rect x="' + (x0 + 0.5).toFixed(1) + '" y="' + y.toFixed(1) + '" width="' + Math.max(1, x1 - x0 - 1).toFixed(1) + '" height="' + (ys(0) - y).toFixed(1) +
+      '" fill="var(--fund)" opacity="' + (a + bw / 2 < 0 ? 1 : 0.35) + '"><title>' + share(c, N) + ' of markets: gap from ' + pts(a) + ' to ' + pts(a + bw) + '</title></rect>';
+  });
+  var X = niceTicks(lo, hi, W < 520 ? 4 : 6);
+  X.ticks.forEach(function(t){
+    if (t < lo || t > hi) return;
+    s += '<text x="' + xs(t) + '" y="' + (H - m.b + 16) + '" text-anchor="middle">' + (t === 0 ? '0' : sign(t) + Math.abs(t * 100).toFixed(X.step * 100 < 1 ? 1 : 0)) + '</text>';
+  });
+  s += '<text x="' + ((m.l + W - m.r) / 2) + '" y="' + (H - 4) + '" text-anchor="middle">Fund return minus ' + kl + ' the index\u2019s return (percentage points)</text>';
+  var z = xs(0), anchor = z < W * 0.2 ? 'start' : z > W * 0.8 ? 'end' : 'middle';
+  s += '<line x1="' + z + '" x2="' + z + '" y1="' + (m.t - 6) + '" y2="' + ys(0) + '" stroke="var(--ink)" stroke-width="1.5"/>';
+  s += '<text x="' + z + '" y="' + (m.t - 10) + '" text-anchor="' + anchor + '" style="fill:var(--ink)">Matched ' + kl + ' the index</text>';
+  s += '<line x1="' + xs(med) + '" x2="' + xs(med) + '" y1="' + m.t + '" y2="' + ys(0) + '" stroke="var(--ink)" stroke-width="1.5" stroke-dasharray="4 4"/>';
+  s += '</svg>';
+  box.innerHTML = s;
+}
+
+/* ---------- Table & CSV ---------- */
+function renderTable(){
+  var P = state.path, kl = kLabel(state.p.k);
+  var head = ['Day', 'Index daily', 'Fund daily', 'Index cumulative', 'Fund cumulative', kl + ' index cumulative', 'Gap (pts)'];
+  var html = '<thead><tr>' + head.map(function(h){ return '<th scope="col">' + h + '</th>'; }).join('') + '</tr></thead><tbody>';
+  var csv = [head.join(',')];
+  for (var d = 1; d <= P.n; d++) {
+    var gap = P.F[d] - P.T[d];
+    html += '<tr><td>' + d + '</td><td>' + pct(P.r[d - 1], 2) + '</td><td>' + pct(P.fr[d], 2) + '</td><td>' + pct(P.I[d], 2) +
+      '</td><td>' + pct(P.F[d], 2) + '</td><td>' + pct(P.T[d], 2) + '</td><td>' + pts(gap) + '</td></tr>';
+    csv.push([d, (P.r[d - 1] * 100).toFixed(4), (P.fr[d] * 100).toFixed(4), (P.I[d] * 100).toFixed(4),
+      (P.F[d] * 100).toFixed(4), (P.T[d] * 100).toFixed(4), (gap * 100).toFixed(4)].join(','));
+  }
+  $('#table').innerHTML = html + '</tbody>';
+  $('#csv').value = csv.join('\n');
+}
+
+function copyText(text, statusEl, okMsg, fallback){
+  function done(ok){
+    statusEl.textContent = ok ? okMsg : 'Copy blocked here. ' + (fallback ? fallback() : '');
+    setTimeout(function(){ statusEl.textContent = ''; }, 2500);
+  }
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(function(){ done(true); }, function(){ done(false); });
+      return;
+    }
+  } catch (e) {}
+  done(false);
+}
+
+/* ---------- Wiring ---------- */
+function populate(){
+  CONFIG.funds.forEach(function(f, i){ var o = document.createElement('option'); o.value = i; o.textContent = f.name; el.fund.appendChild(o); });
+  CONFIG.indexes.forEach(function(u){ var o = document.createElement('option'); o.value = u.id; o.textContent = u.name + (u.vol ? ' (' + u.vol + '% vol)' : ''); el.und.appendChild(o); });
+  $('#prospectusLink').href = CONFIG.prospectusUrl;
+}
+function bindNumber(input, range, min, max, decimals){
+  input.addEventListener('change', function(){
+    var v = parseFloat(input.value);
+    if (!isFinite(v)) v = range ? +range.value : min;
+    v = clamp(v, min, max);
+    input.value = decimals ? v.toFixed(decimals) : Math.round(v);
+    if (range) range.value = input.value;
+    if (input === el.vol) matchPreset();
+    schedule();
+  });
+  if (range) range.addEventListener('input', function(){
+    input.value = range.value;
+    if (input === el.vol) matchPreset();
+    schedule();
+  });
+}
+function matchPreset(){
+  var v = +el.vol.value, u = CONFIG.indexes.filter(function(x){ return x.id === el.und.value; })[0];
+  if (u && u.vol !== v) {
+    var hit = CONFIG.indexes.filter(function(x){ return x.vol === v; })[0];
+    el.und.value = hit ? hit.id : 'custom';
+  }
+}
+
+populate();
+readURL();
+
+bindNumber(el.vol, el.volR, 5, 150, 0);
+bindNumber(el.drift, null, -50, 50, 0);
+bindNumber(el.days, el.daysR, 1, 504, 0);
+bindNumber(el.sofr, null, 0, 15, 2);
+bindNumber(el.spread, null, 0, 5, 2);
+bindNumber(el.seed, null, 1, 999999, 0);
+
+el.und.addEventListener('change', function(){
+  var u = CONFIG.indexes.filter(function(x){ return x.id === el.und.value; })[0];
+  if (u && u.vol) { el.vol.value = el.volR.value = u.vol; }
+  schedule();
+});
+[el.fund, el.tails, el.fees].forEach(function(x){ x.addEventListener('change', schedule); });
+el.paths.addEventListener('change', function(){ state.pathIdx = 0; schedule(); });
+document.querySelectorAll('input[name=scen]').forEach(function(r){ r.addEventListener('change', schedule); });
+el.seed.addEventListener('change', function(){ state.pathIdx = 0; });
+$('#newSeed').addEventListener('click', function(){
+  el.seed.value = 1 + Math.floor(Math.random() * 999998);
+  state.pathIdx = 0; run();
+});
+$('#prevPath').addEventListener('click', function(){ if (state.pathIdx > 0) { state.pathIdx--; run(); } });
+$('#nextPath').addEventListener('click', function(){ if (state.pathIdx < state.p.paths - 1) { state.pathIdx++; run(); } });
+$('#daily').addEventListener('toggle', function(){ if ($('#daily').open) renderTable(); });
+$('#copyCsv').addEventListener('click', function(){
+  copyText($('#csv').value, $('#csvStatus'), 'CSV copied', function(){ return 'Select the table to copy it.'; });
+});
+$('#copyLink').addEventListener('click', function(){
+  var url;
+  try { url = window.location.href.split('?')[0] + '?' + buildQuery(state.p); } catch (e) { url = '?' + buildQuery(state.p); }
+  var field = $('#shareUrl');
+  copyText(url, $('#linkStatus'), 'Link copied', function(){
+    field.value = url; field.classList.remove('is-hidden'); field.select();
+    return 'Copy the link below.';
+  });
+});
+
+if ('ResizeObserver' in window) {
+  var raf = 0, lastW = 0;
+  new ResizeObserver(function(){
+    var w = $('#lineChart').clientWidth;
+    if (Math.abs(w - lastW) < 2) return;
+    lastW = w;
+    cancelAnimationFrame(raf);
+    raf = requestAnimationFrame(function(){ drawLine(); drawHist(); });
+  }).observe($('.results'));
+}
+
+run();
+})();
+</script>
+</body>
+</html>
