@@ -299,7 +299,6 @@ textarea{width:100%;height:1px;opacity:0;position:absolute;left:-9999px}
 
 /* ---------- Issuer configuration: replace with your lineup ---------- */
 var CONFIG = {
-  prospectusUrl: '#',
   funds: [
     { name: '2× Long',     k:  2, er: 0.95 },
     { name: '3× Long',     k:  3, er: 0.95 },
@@ -766,7 +765,6 @@ function copyText(text, statusEl, okMsg, fallback){
 function populate(){
   CONFIG.funds.forEach(function(f, i){ var o = document.createElement('option'); o.value = i; o.textContent = f.name; el.fund.appendChild(o); });
   CONFIG.indexes.forEach(function(u){ var o = document.createElement('option'); o.value = u.id; o.textContent = u.name + (u.vol ? ' (' + u.vol + '% vol)' : ''); el.und.appendChild(o); });
-  $('#prospectusLink').href = CONFIG.prospectusUrl;
 }
 function bindNumber(input, range, min, max, decimals){
   input.addEventListener('change', function(){
